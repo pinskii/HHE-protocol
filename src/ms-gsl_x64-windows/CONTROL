@@ -1,0 +1,8 @@
+Package: ms-gsl
+Version: 4.0.0
+Port-Version: 1
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: bf25867d7f40689f73306575f5f0fa61c744f3c23aa602927dd0f7558637d4d0
+Description: Microsoft implementation of the Guidelines Support Library
