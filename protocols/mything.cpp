@@ -8,8 +8,8 @@
 #include "../src/pasta_3_seal.h"
 #include "../src/utils.h"
 #include "../src/sealhelper.h"
-#include "../src/openssl/include/openssl/rsa.h"
-#include "../src/openssl/pem.h"
+// #include "../src/openssl/rsa.h"
+// #include "../src/openssl/pem.h"
 
 using namespace std;
 using namespace seal;
@@ -24,35 +24,34 @@ struct User
 
 struct Analyst
 {
-    vector<int64_t> w{17, 31, 24, 17}; // dummy weights
-    vector<int64_t> b{-5, -5, -5, -5}; // dummy biases
-    Ciphertext w_c;                    // the encrypted weights
-    Ciphertext b_c;                    // the encrypted biases
-    PublicKey analyst_pk;
-    SecretKey analyst_sk;
-    RelinKeys analyst_rk;
-    GaloisKeys he_gk;
+    vector<int64_t> w{10, 29, 13, 19}; // weights
+    vector<int64_t> b{-3, -3, -3, -3}; // biases
+    Ciphertext w_c; // encrypted weights
+    Ciphertext b_c; // encrypted biases
+    PublicKey analyst_pk; // HE public key
+    SecretKey analyst_sk; // HE secret key
+    RelinKeys analyst_rk; 
+    GaloisKeys he_gk;   
 };
 
 struct CSP
 {
-    std::vector<Ciphertext> c_prime; // the decomposed HE encrypted data of user's c_i
-    Ciphertext c_res;                // the HE encrypted results that will be sent to the Analyst
-    SecretKey he_sk;
+    std::vector<Ciphertext> c_prime; // HE encrypted user's data c
+    std::vector<Ciphertext> c_res; // evaluation result
+    SecretKey csp_sk;
 };
 
 int main()
 {
-    OpenSSL_add_all_algorithms();
     User User;
     Analyst Analyst;
     CSP CSP;
-    chrono::high_resolution_clock::time_point st1, st2, st3, end1, end2, end3;
-    chrono::milliseconds diff1, diff2, diff3;
+    chrono::high_resolution_clock::time_point st1, st2, st3, st4, st5, st6, end1, end2, end3, end4, end5, end6;
+    chrono::milliseconds diff1, diff2, diff3, diff4, diff5, diff6;
 
     // SD Setup
     cout << "SD.Setup" << endl;
-    RSA *keypair = RSA_generate_key(2048, RSA_F4, nullptr, nullptr);
+    // RSA *keypair = RSA_generate_key(2048, RSA_F4, nullptr, nullptr);
     cout << "Analyst creates the context" << endl;
     shared_ptr<SEALContext> context = get_seal_context(65537, 16384, 128);
     print_parameters(*context);
@@ -76,7 +75,10 @@ int main()
 
     cout << "CSP creates a secret key" << endl;
     KeyGenerator csp_keygen(*context);
-    CSP.he_sk = csp_keygen.secret_key();
+    CSP.csp_sk = csp_keygen.secret_key();
+
+    cout << "Analyst sends its evaluation key to CSP (creates m_1)" << endl;
+
 
     // SD Add
     cout << "SD.Add" << endl;
@@ -84,18 +86,57 @@ int main()
     print_line(__LINE__);
 
     cout << "User encrypts their data using the symmetric key" << endl;
+    st3 = chrono::high_resolution_clock::now(); // Start time
     PASTA_3::PASTA SymmetricEncryptor(User.k, 65537);
     User.c = SymmetricEncryptor.encrypt(User.x);
+    end3 = chrono::high_resolution_clock::now(); // Stop time
+    diff3 = chrono::duration_cast<chrono::milliseconds>(end3-st3);
     print_vec(User.c, User.c.size(), "User's encrypted data'");
+    cout << "Time to encrypt user's symmetric key: " << diff3.count() << endl;
     print_line(__LINE__);
 
     cout << "User homomorphically encrypts their symmetric key under analyst's public key" << endl;
+    st2 = chrono::high_resolution_clock::now(); // Start time
     User.c_k = encrypt_symmetric_key(User.k, true, analyst_batch, analyst_enc);
+    end2 = chrono::high_resolution_clock::now(); // Stop time
+    diff2 = chrono::duration_cast<chrono::milliseconds>(end2-st2);
+    cout << "Time to encrypt user's symmetric key: " << diff2.count() << endl;
+
+
+    cout << "User sends its data and encrypted key to CSP (creates m_2)" << endl;
 
     cout << "CSP transforms the symmetric ciphertext (received data) to a homomorphic one" << endl;
-    PASTA_3::PASTA_SEAL CSPWorker(context, Analyst.analyst_pk, CSP.he_sk, Analyst.analyst_rk, Analyst.he_gk);
+    st4 = chrono::high_resolution_clock::now(); // Start time
+    PASTA_3::PASTA_SEAL CSPWorker(context, Analyst.analyst_pk, CSP.csp_sk, Analyst.analyst_rk, Analyst.he_gk);
     CSP.c_prime = CSPWorker.decomposition(User.c, User.c_k, true);
+    end4 = chrono::high_resolution_clock::now(); // Stop time
+    diff4 = chrono::duration_cast<chrono::milliseconds>(end4-st4);
+    cout << "Time to decomposition: " << diff4.count() << endl;
 
 
     // SD Query
-}
+    cout << "SD.Query" << endl;
+    cout << "Analyst sends a query to CSP (creates m_3)" << endl;
+
+    cout << "CSP evaluates a linear transformation to the data" << endl;
+    st5 = chrono::high_resolution_clock::now(); // Start time
+    packed_enc_multiply(CSP.c_prime[0], Analyst.w_c, CSP.c_res[0], analyst_eval);
+    packed_enc_addition(CSP.c_res[0], Analyst.b_c, CSP.c_res[0], analyst_eval);
+    end5 = chrono::high_resolution_clock::now(); // Stop time
+    diff5 = chrono::duration_cast<chrono::milliseconds>(end5-st5);
+    cout << "Time to evaluate (multiply + addition): " << diff5.count() << endl;
+
+    cout << "CSP sends the evaluated data back (creates m_4)" << endl;
+
+
+    cout << "Analyst decrypts the data" << endl;
+    Plaintext result;
+    // decrypting(CSP.c_res[0], Analyst.analyst_sk, analyst_batch, *context);
+    st6 = chrono::high_resolution_clock::now(); // Start time
+    Decryptor analyst_dec(*context, Analyst.analyst_sk);
+    seal::Decryptor::decrypt(CSP.c_res, result);
+    end6 = chrono::high_resolution_clock::now(); // Stop time
+    diff6 = chrono::duration_cast<chrono::milliseconds>(end6-st6);
+    cout << "Result: " << result << endl;
+    cout << "Time to decrypt: " << diff5.count() << endl;
+}   

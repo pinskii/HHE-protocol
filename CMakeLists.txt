@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(SEAL 4.1.1 REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 # Add your source files
 file(GLOB SOURCES "src/*.cpp")
@@ -20,6 +21,7 @@ target_include_directories(YourExecutable PRIVATE include)
 # Specify additional libraries if needed
 # target_link_libraries(YourExecutable PRIVATE YourLibrary)
 target_link_libraries(mything PRIVATE SEAL::seal)
+target_link_libraries(mything OpenSSL::SSL OpenSSL::Crypto)
 
 # Specify compiler options if needed
 # target_compile_options(YourExecutable PRIVATE -Wall -Wextra)
@@ -30,3 +32,5 @@ set_target_properties(YourExecutable PROPERTIES
 )
 
 # You can add more configuration options as needed
+
+
