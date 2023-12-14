@@ -8,8 +8,6 @@
 #include "../src/pasta_3_seal.h"
 #include "../src/utils.h"
 #include "../src/sealhelper.h"
-// #include "../src/openssl/rsa.h"
-// #include "../src/openssl/pem.h"
 
 using namespace std;
 using namespace seal;
@@ -31,7 +29,7 @@ struct Analyst
     PublicKey analyst_pk; // HE public key
     SecretKey analyst_sk; // HE secret key
     RelinKeys analyst_rk; 
-    GaloisKeys he_gk;   
+    GaloisKeys analyst_gk;   
 };
 
 struct CSP
@@ -51,11 +49,9 @@ int main()
 
     // SD Setup
     cout << "SD.Setup" << endl;
-    // RSA *keypair = RSA_generate_key(2048, RSA_F4, nullptr, nullptr);
     cout << "Analyst creates the context" << endl;
     shared_ptr<SEALContext> context = get_seal_context(65537, 16384, 128);
     print_parameters(*context);
-    print_line(__LINE__);
 
     cout << "Analyst creates keys, encryptor and evaluator" << endl;
     st1 = chrono::high_resolution_clock::now(); // Start time
@@ -64,11 +60,17 @@ int main()
     keygen.create_public_key(Analyst.analyst_pk);
     keygen.create_relin_keys(Analyst.analyst_rk);
     BatchEncoder analyst_batch(*context);
+    vector<int> gk_indices = add_gk_indices(false, analyst_batch);
+    keygen.create_galois_keys(gk_indices, Analyst.analyst_gk);
     Encryptor analyst_enc(*context, Analyst.analyst_pk);
     Evaluator analyst_eval(*context);
     end1 = chrono::high_resolution_clock::now(); // Stop time
     diff1 = chrono::duration_cast<chrono::milliseconds>(end1-st1);
     cout << "Time to create HE keys for analyst: " << diff1.count() << endl;
+
+    // Analyst encrypts weights and biases" 
+    Analyst.w_c = encrypting(Analyst.w, Analyst.he_pk, analyst_batch, analyst_enc);
+    Analyst.b_c = encrypting(Analyst.b, Analyst.he_pk, analyst_batch, analyst_enc);
 
     cout << "User creates a symmetric key" << endl;
     User.k = get_symmetric_key();
@@ -83,7 +85,6 @@ int main()
     // SD Add
     cout << "SD.Add" << endl;
     print_vec(User.x, User.x.size(), "User's data to send");
-    print_line(__LINE__);
 
     cout << "User encrypts their data using the symmetric key" << endl;
     st3 = chrono::high_resolution_clock::now(); // Start time
@@ -93,7 +94,6 @@ int main()
     diff3 = chrono::duration_cast<chrono::milliseconds>(end3-st3);
     print_vec(User.c, User.c.size(), "User's encrypted data'");
     cout << "Time to encrypt user's symmetric key: " << diff3.count() << endl;
-    print_line(__LINE__);
 
     cout << "User homomorphically encrypts their symmetric key under analyst's public key" << endl;
     st2 = chrono::high_resolution_clock::now(); // Start time
@@ -107,7 +107,7 @@ int main()
 
     cout << "CSP transforms the symmetric ciphertext (received data) to a homomorphic one" << endl;
     st4 = chrono::high_resolution_clock::now(); // Start time
-    PASTA_3::PASTA_SEAL CSPWorker(context, Analyst.analyst_pk, CSP.csp_sk, Analyst.analyst_rk, Analyst.he_gk);
+    PASTA_3::PASTA_SEAL CSPWorker(context, Analyst.analyst_pk, CSP.csp_sk, Analyst.analyst_rk, Analyst.analyst_gk);
     CSP.c_prime = CSPWorker.decomposition(User.c, User.c_k, true);
     end4 = chrono::high_resolution_clock::now(); // Stop time
     diff4 = chrono::duration_cast<chrono::milliseconds>(end4-st4);
@@ -130,13 +130,13 @@ int main()
 
 
     cout << "Analyst decrypts the data" << endl;
-    Plaintext result;
-    // decrypting(CSP.c_res[0], Analyst.analyst_sk, analyst_batch, *context);
+    vector<int64_t> result;
     st6 = chrono::high_resolution_clock::now(); // Start time
-    Decryptor analyst_dec(*context, Analyst.analyst_sk);
-    seal::Decryptor::decrypt(CSP.c_res, result);
+    result = decrypting(CSP.c_res, Analyst.analyst_sk, analyst_batch, *context, Analyst.w.size());
     end6 = chrono::high_resolution_clock::now(); // Stop time
     diff6 = chrono::duration_cast<chrono::milliseconds>(end6-st6);
-    cout << "Result: " << result << endl;
-    cout << "Time to decrypt: " << diff5.count() << endl;
+    print_vec(result, result.size(), "Result");
+    cout << "Time to decrypt: " << diff6.count() << endl;
+
+    return 0;
 }   

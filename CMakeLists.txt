@@ -1,36 +1,19 @@
-cmake_minimum_required(VERSION 3.10)  # Minimum version of CMake required
+cmake_minimum_required(VERSION 3.10) 
 
-project(HHE-protocol)  # Replace YourProjectName with the actual name of your project
+project(HHE-protocol)  
 
-# Set C++ standard (optional but recommended)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(SEAL_DIR src/seal_x64-windows/share/seal)
+set(Microsoft.GSL_DIR src/ms-gsl_x64-windows/share/Microsoft.GSL)
 
 find_package(SEAL 4.1.1 REQUIRED)
-find_package(OpenSSL REQUIRED)
 
-# Add your source files
 file(GLOB SOURCES "src/*.cpp")
 
-# Add executable target
-add_executable(mything protocols/mything.cpp)
+add_executable(mything protocols/HHE-protocol.cpp)
 
-# Specify additional include directories if needed
-target_include_directories(YourExecutable PRIVATE include)
+target_link_libraries(HHE-protocol PRIVATE SEAL::seal)
 
-# Specify additional libraries if needed
-# target_link_libraries(YourExecutable PRIVATE YourLibrary)
-target_link_libraries(mything PRIVATE SEAL::seal)
-target_link_libraries(mything OpenSSL::SSL OpenSSL::Crypto)
-
-# Specify compiler options if needed
-# target_compile_options(YourExecutable PRIVATE -Wall -Wextra)
-
-# Specify output directory for the executable (optional)
-set_target_properties(YourExecutable PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-)
-
-# You can add more configuration options as needed
 
 
