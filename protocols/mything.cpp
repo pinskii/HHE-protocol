@@ -8,6 +8,8 @@
 #include "../src/pasta_3_seal.h"
 #include "../src/utils.h"
 #include "../src/sealhelper.h"
+#include "../src/openssl/include/openssl/rsa.h"
+#include "../src/openssl/pem.h"
 
 using namespace std;
 using namespace seal;
@@ -41,28 +43,33 @@ struct CSP
 
 int main()
 {
+    OpenSSL_add_all_algorithms();
     User User;
     Analyst Analyst;
     CSP CSP;
-
+    chrono::high_resolution_clock::time_point st1, st2, st3, end1, end2, end3;
+    chrono::milliseconds diff1, diff2, diff3;
 
     // SD Setup
+    cout << "SD.Setup" << endl;
+    RSA *keypair = RSA_generate_key(2048, RSA_F4, nullptr, nullptr);
     cout << "Analyst creates the context" << endl;
     shared_ptr<SEALContext> context = get_seal_context(65537, 16384, 128);
     print_parameters(*context);
     print_line(__LINE__);
 
-    cout << "SD.Setup" << endl;
-
     cout << "Analyst creates keys, encryptor and evaluator" << endl;
+    st1 = chrono::high_resolution_clock::now(); // Start time
     KeyGenerator keygen(*context);
     Analyst.analyst_sk = keygen.secret_key(); 
     keygen.create_public_key(Analyst.analyst_pk);
     keygen.create_relin_keys(Analyst.analyst_rk);
-    BatchEncoder analyst_he_benc(*context);
-    Encryptor analyst_he_enc(*context, Analyst.analyst_pk);
-    Evaluator analyst_he_eval(*context);
-    print_line(__LINE__);
+    BatchEncoder analyst_batch(*context);
+    Encryptor analyst_enc(*context, Analyst.analyst_pk);
+    Evaluator analyst_eval(*context);
+    end1 = chrono::high_resolution_clock::now(); // Stop time
+    diff1 = chrono::duration_cast<chrono::milliseconds>(end1-st1);
+    cout << "Time to create HE keys for analyst: " << diff1.count() << endl;
 
     cout << "User creates a symmetric key" << endl;
     User.k = get_symmetric_key();
@@ -72,6 +79,7 @@ int main()
     CSP.he_sk = csp_keygen.secret_key();
 
     // SD Add
+    cout << "SD.Add" << endl;
     print_vec(User.x, User.x.size(), "User's data to send");
     print_line(__LINE__);
 
@@ -82,10 +90,12 @@ int main()
     print_line(__LINE__);
 
     cout << "User homomorphically encrypts their symmetric key under analyst's public key" << endl;
-    User.c_k = encrypt_symmetric_key(User.k, true, analyst_he_benc, analyst_he_enc);
+    User.c_k = encrypt_symmetric_key(User.k, true, analyst_batch, analyst_enc);
 
     cout << "CSP transforms the symmetric ciphertext (received data) to a homomorphic one" << endl;
-    CSP.c_prime = PASTA_SEAL::decomposition(User.c, User.k, true);
+    PASTA_3::PASTA_SEAL CSPWorker(context, Analyst.analyst_pk, CSP.he_sk, Analyst.analyst_rk, Analyst.he_gk);
+    CSP.c_prime = CSPWorker.decomposition(User.c, User.c_k, true);
 
 
     // SD Query
+}

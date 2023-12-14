@@ -5,6 +5,9 @@
 #include "Cipher.h"
 #include "seal/seal.h"
 
+
+namespace PASTA_3 {
+
 class SEALZpCipher {
  public:
   typedef std::vector<uint64_t> vector;
@@ -38,8 +41,8 @@ class SEALZpCipher {
   size_t bsgs_n2;
 
  public:
-  SEALZpCipher(ZpCipherParams params, std::vector<uint64_t> secret_key,
-               std::shared_ptr<seal::SEALContext> con);
+  SEALZpCipher(ZpCipherParams params, std::shared_ptr<seal::SEALContext> con, 
+               seal::PublicKey pk, seal::SecretKey sk, seal::RelinKeys rk, seal::GaloisKeys gk);
 
   virtual ~SEALZpCipher() = default;
   // Size of the secret key in words
@@ -48,6 +51,14 @@ class SEALZpCipher {
   size_t get_plain_size() const { return params.plain_size; }
   // Size of a plaintext block in words
   size_t get_cipher_size() const { return params.cipher_size; }
+
+  // DK changes
+//   std::vector<seal::Ciphertext> get_enc_sk() const { return secret_key_encrypted; } // DK changes
+//   seal::PublicKey get_he_pk() const { return he_pk; } // DK changes
+//   seal::SecretKey get_he_sk() const { return he_sk; } // DK changes
+//   void set_enc_ssk(std::vector<seal::Ciphertext> enc_ssk) { secret_key_encrypted = enc_ssk; }
+//   void set_ssk(std::vector<uint64_t> ssk) { secret_key = ssk; }
+  // end of DK changes
 
   void add_some_gk_indices(std::vector<int>& gk_ind);
   void add_bsgs_indices(uint64_t bsgs_n1, uint64_t bsgs_n2);
@@ -63,7 +74,7 @@ class SEALZpCipher {
   static std::shared_ptr<seal::SEALContext> create_context(size_t mod_degree,
                                                            uint64_t plain_mod,
                                                            int seclevel = 128);
-  virtual void encrypt_key(bool batch_encoder = false) = 0;
+//   virtual void encrypt_key(bool batch_encoder = false) = 0;
   virtual std::vector<seal::Ciphertext> HE_decrypt(
       std::vector<uint64_t>& ciphertext, bool batch_encoder = false) = 0;
   virtual std::vector<uint64_t> decrypt_result(
@@ -104,9 +115,9 @@ class SEALZpCipher {
               const std::vector<seal::Ciphertext>& vi);
 
   // packed
-  void packed_encrypt(seal::Ciphertext& out, std::vector<uint64_t> in);
-  void packed_decrypt(seal::Ciphertext& in, std::vector<uint64_t>& out,
-                      size_t size);
+  void packed_encrypt(seal::Ciphertext& out, std::vector<int64_t> in);  // DK changes
+  void packed_decrypt(seal::Ciphertext& in, std::vector<int64_t>& out,
+                      size_t size);  // DK changes
   // vo = M * vi
   void packed_matMul(seal::Ciphertext& vo, const matrix& M,
                      const seal::Ciphertext& vi);
@@ -114,4 +125,13 @@ class SEALZpCipher {
   void packed_affine(seal::Ciphertext& vo, const matrix& M,
                      const seal::Ciphertext& vi, const vector& b);
   void packed_square(seal::Ciphertext& vo, const seal::Ciphertext& vi);
+
+  void packed_enc_mul(const seal::Ciphertext &encrypted1, // DK changes
+                      const seal::Ciphertext &encrypted2, 
+                      seal::Ciphertext &destination);  
+  void packed_enc_add(const seal::Ciphertext &encrypted1, // DK changes
+                      const seal::Ciphertext &encrypted2, 
+                      seal::Ciphertext &destination);  
 };
+
+}  // namespace PASTA_3_MODIFIED_1

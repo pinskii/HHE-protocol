@@ -3,24 +3,32 @@
 #include <algorithm>
 #include <iostream>
 
-SEALZpCipher::SEALZpCipher(ZpCipherParams params,
-                           std::vector<uint64_t> secret_key,
-                           std::shared_ptr<seal::SEALContext> con)
-    : secret_key(secret_key),
-      params(params),
-      context(con),
-      keygen(*context),
-      he_sk(keygen.secret_key()),
-      encryptor(*context, he_sk),
-      evaluator(*context),
-      decryptor(*context, he_sk),
-      batch_encoder(*context) {
-  if (secret_key.size() != params.key_size)
-    throw std::runtime_error("Invalid Key length");
+namespace PASTA_3_MODIFIED_1 {
 
-  keygen.create_relin_keys(he_rk);
-  keygen.create_public_key(he_pk);
-  encryptor.set_public_key(he_pk);
+SEALZpCipher::SEALZpCipher(ZpCipherParams params,
+                           std::shared_ptr<seal::SEALContext> con,
+                           seal::PublicKey pk,
+                           seal::SecretKey sk,
+                           seal::RelinKeys rk,
+                           seal::GaloisKeys gk
+                           )
+    : params(params),
+      context(con),
+      keygen(*context, sk),
+      he_pk(pk),
+      he_sk(sk),
+      he_rk(rk),
+      he_gk(gk),
+      encryptor(*context, pk),
+      evaluator(*context),
+      decryptor(*context, sk),
+      batch_encoder(*context) {
+  // if (secret_key.size() != params.key_size)
+  //   throw std::runtime_error("Invalid Key length");
+
+  // keygen.create_relin_keys(he_rk);
+  // keygen.create_public_key(he_pk);
+  encryptor.set_public_key(pk);
 
   mod_degree = context->first_context_data()->parms().poly_modulus_degree();
   plain_mod = context->first_context_data()->parms().plain_modulus().value();
@@ -430,8 +438,8 @@ void SEALZpCipher::square(std::vector<seal::Ciphertext>& vo,
 // packed:
 //----------------------------------------------------------------
 
-void SEALZpCipher::packed_encrypt(seal::Ciphertext& out,
-                                  std::vector<uint64_t> in) {
+void SEALZpCipher::packed_encrypt(seal::Ciphertext& out,  // DK changes
+                                  std::vector<int64_t> in) {  
   seal::Plaintext p;
   batch_encoder.encode(in, p);
   encryptor.encrypt(p, out);
@@ -439,8 +447,8 @@ void SEALZpCipher::packed_encrypt(seal::Ciphertext& out,
 
 //----------------------------------------------------------------
 
-void SEALZpCipher::packed_decrypt(seal::Ciphertext& in,
-                                  std::vector<uint64_t>& out, size_t size) {
+void SEALZpCipher::packed_decrypt(seal::Ciphertext& in,  // DK changes
+                                  std::vector<int64_t>& out, size_t size) { 
   seal::Plaintext p;
   decryptor.decrypt(in, p);
   batch_encoder.decode(p, out);
@@ -478,3 +486,19 @@ void SEALZpCipher::packed_square(seal::Ciphertext& vo,
   evaluator.square(vi, vo);
   evaluator.relinearize_inplace(vo, he_rk);
 }
+
+void SEALZpCipher::packed_enc_mul(const seal::Ciphertext &encrypted1, 
+                                  const seal::Ciphertext &encrypted2, 
+                                  seal::Ciphertext &destination) // DK changes
+{
+  evaluator.multiply(encrypted1, encrypted2, destination);
+}  
+
+void SEALZpCipher::packed_enc_add(const seal::Ciphertext &encrypted1, 
+                                  const seal::Ciphertext &encrypted2, 
+                                  seal::Ciphertext &destination)  // DK changes
+{
+  evaluator.add(encrypted1, encrypted2, destination);
+}
+
+}  // PASTA_3_MODIFIED_1 namespace
