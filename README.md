@@ -1,5 +1,9 @@
 # HHE-protocol
 
+This repository is coursework for Tampere University course Security Protocols: Helping Alice and Bob to Share Secrets.
+This coursework is not fully tested and finished yet!
+
+
 How to Run
 
 Prerequisites:
